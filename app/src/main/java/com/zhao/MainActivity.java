@@ -6,6 +6,7 @@ import androidx.core.app.ActivityCompat;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.hardware.SensorManager;
@@ -40,6 +41,11 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public static final int MODE_START = 1;
     public static int viewMode = MODE_STOP;
     private MenuItem mMenuItem;
+
+    // 帧的计数
+    private static int frameCounter = 0;
+    // 判断是否是开始处理的第一帧，以用于KeyExtraction
+    public static boolean isFirstFrame = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,6 +135,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         }
     }
 
+    // 设置菜单栏
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         Log.d(TAG, "called onCreateOptionsMenu");
@@ -151,6 +158,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         return true;
     }
 
+    // 实现 CvCameraViewListener2 接口的三个方法
     @Override
     public void onCameraViewStarted(int width, int height) {
 
@@ -175,6 +183,19 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         BitmapApplication myApp = (BitmapApplication) getApplicationContext();
         myApp.setOneBitmap(bitmap); // 存入Bitmap格式的帧画面，以备service中取出分析
 
+        // 系统开始处理帧画面
+        if (viewMode == MODE_START) {
+            // 保存每帧画面在本地
+            new Thread(new FrameSaver("frame-"+frameCounter, bitmap)).start();
+
+            Intent keyboardIntent = KeystrokeService.newIntent(MainActivity.this);
+            // 帧计数传入Service，帧通过MyApplication传入
+            keyboardIntent.putExtra("frameCounter", frameCounter);
+            frameCounter++;
+            // 进入服务(记得在AndroidManifest.xml中注册服务)
+            startService(keyboardIntent);
+
+        }
         return frame;
     }
 
