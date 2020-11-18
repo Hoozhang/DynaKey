@@ -65,7 +65,7 @@ public class KeystrokeService extends IntentService {
             //Mat transposeFrame = new Mat(), flipFrame = new Mat();
             //transpose(oneFrame, transposeFrame);
             //flip(transposeFrame, flipFrame, 1);
-            keystrokeTask.KeyStrokeDetection();
+            //keystrokeTask.KeyStrokeDetection();
         }
     }
 

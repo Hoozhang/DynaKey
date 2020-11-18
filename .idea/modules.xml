@@ -2,9 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/DynaKey.iml" filepath="$PROJECT_DIR$/.idea/modules/DynaKey.iml" group="DynaKey" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/app.iml" filepath="$PROJECT_DIR$/.idea/modules/app/app.iml" group="DynaKey/app" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/openCVLibrary342/openCVLibrary342.iml" filepath="$PROJECT_DIR$/.idea/modules/openCVLibrary342/openCVLibrary342.iml" group="DynaKey/openCVLibrary342" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/DynaKey.iml" filepath="$PROJECT_DIR$/.idea/modules/DynaKey.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/DynaKey.app.iml" filepath="$PROJECT_DIR$/.idea/modules/app/DynaKey.app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/openCVLibrary3412/DynaKey.openCVLibrary3412.iml" filepath="$PROJECT_DIR$/.idea/modules/openCVLibrary3412/DynaKey.openCVLibrary3412.iml" />
     </modules>
   </component>
 </project>
