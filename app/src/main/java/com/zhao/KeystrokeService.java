@@ -10,6 +10,8 @@ import androidx.annotation.Nullable;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 
+import java.util.List;
+
 public class KeystrokeService extends IntentService {
     private static final String TAG = "KeyboardService";
 
@@ -65,7 +67,14 @@ public class KeystrokeService extends IntentService {
             //Mat transposeFrame = new Mat(), flipFrame = new Mat();
             //transpose(oneFrame, transposeFrame);
             //flip(transposeFrame, flipFrame, 1);
-            //keystrokeTask.KeyStrokeDetection();
+
+
+            Mat handFrame = keystrokeTask.HandSegmentation();
+            List<TipObject> fingertips = keystrokeTask.TipDetection(handFrame);
+
+            if (!fingertips.isEmpty()) {
+                keystrokeTask.KeystrokeDetection(fingertips);
+            }
         }
     }
 

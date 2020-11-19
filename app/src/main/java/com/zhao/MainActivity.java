@@ -23,6 +23,12 @@ import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
     private static final String TAG = "MainActivity";
@@ -46,6 +52,18 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private static int frameCounter = 0;
     // 判断是否是开始处理的第一帧，以用于KeyExtraction
     public static boolean isFirstFrame = true;
+
+    // 提取的"按键-坐标"映射
+    public static Map<String, Point> keyMap = new HashMap<>();
+    // 键盘的四个角点
+    public static Point keyboardLeftUp = new Point(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
+    public static Point keyboardRightUp = new Point(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
+    public static Point keyboardLeftDown = new Point(Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
+    public static Point keyboardRightDown = new Point(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
+    // 手重心到指尖的距离
+    public static List<TipObject> prevFingertips = new ArrayList<>();
+    //
+    public static int prevStrokeFrame = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -106,7 +124,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     }
 
     // 通过OpenCV管理Android服务，异步初始化OpenCV
-    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+    private final BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
         public void onManagerConnected(int status) {
             switch (status) {

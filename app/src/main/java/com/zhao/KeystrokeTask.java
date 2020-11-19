@@ -24,6 +24,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static com.zhao.MainActivity.keyMap;
+import static com.zhao.MainActivity.keyboardLeftDown;
+import static com.zhao.MainActivity.keyboardLeftUp;
+import static com.zhao.MainActivity.keyboardRightDown;
+import static com.zhao.MainActivity.keyboardRightUp;
+import static com.zhao.MainActivity.prevFingertips;
+import static com.zhao.MainActivity.prevStrokeFrame;
 import static java.lang.Math.PI;
 import static java.lang.Math.max;
 import static java.lang.Math.pow;
@@ -39,15 +46,6 @@ public class KeystrokeTask {
     // 帧的宽度和高度
     private final int frameWidth, frameHeight;
 
-    // 提取的"按键-坐标"映射
-    public static Map<String, Point> keyMap = new HashMap<>();
-
-    //键盘的四个角点
-    public static Point keyboardLeftUp = new Point(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
-    public static Point keyboardRightUp = new Point(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
-    public static Point keyboardLeftDown = new Point(Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
-    public static Point keyboardRightDown = new Point(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
-
     public KeystrokeTask(int count, Mat oneFrame) {
         frameCounter = count;
         frameWidth = oneFrame.width();
@@ -55,10 +53,14 @@ public class KeystrokeTask {
         inputFrame = oneFrame.clone();
     }
 
-
-
-    /** 以下是 Key Exaction 部分 */
-
+    /**
+     * Key Extraction,
+     * 预处理帧, 返回Canny边缘检测后的二进制图
+     * 找轮廓, 面积最大的视为键盘边缘轮廓
+     * 根据夹角找键盘的四个角点
+     * 根据轮廓重心和面积找key的重心
+     * 映射键盘布局和key的坐标
+     */
     public void KeyExtraction() {
         Mat frame = inputFrame.clone();
         // 预处理图像: 阈值化&边缘检测，返回cannyImage
@@ -275,12 +277,17 @@ public class KeystrokeTask {
         new Thread(new FrameSaver(fileName, bitmap)).start(); // 保存图片
     }
 
-    /** 以下是 Fingertip Detection 部分 */
-
-    // 从帧画面中分割手部区域
-    private Mat HandSegmentation(Mat oneFrame) {
+    /**
+     * Fingertip Detection,
+     * 阈值化+Ostu方法分割出手部的轮廓
+     * 找出面积最大的两个轮廓, 视为两只手的轮廓
+     * 对每个轮廓, 计算手部重心到轮廓点的距离
+     * 根据Prominence和水平间距过滤出波峰, 即为指尖
+     * 同时计算重心到指尖的距离, 方便后续的按键动作检测
+     */
+    public Mat HandSegmentation() {
         Mat YCrCbFrame = new Mat();
-        Imgproc.cvtColor(oneFrame, YCrCbFrame, Imgproc.COLOR_BGR2YCrCb);
+        Imgproc.cvtColor(inputFrame, YCrCbFrame, Imgproc.COLOR_BGR2YCrCb);
         // Cr + Otsu 方法，提取Cr分量 & Ostu分量阈值化
         Mat CrFrame = new Mat();
         // 分离通道，提取Cr分量
@@ -292,12 +299,13 @@ public class KeystrokeTask {
         Imgproc.erode(CrFrame, CrFrame, element);
         Imgproc.dilate(CrFrame, CrFrame, element);
         // OpenCV4PC手是白色，OpenCV4Android手是黑色；如果不反过来，后面指尖提取会出问题
-        Imgproc.threshold(CrFrame, CrFrame, 100, 255, Imgproc.THRESH_BINARY);
+        Imgproc.threshold(CrFrame, CrFrame, 100, 255, Imgproc.THRESH_BINARY_INV);
         return CrFrame;
     }
 
     // 根据手的轮廓，检测按键的手指指尖
-    private List<Point> TipDetection(Mat CrFrame) {
+    public List<TipObject> TipDetection(Mat CrFrame) {
+        List<TipObject> finalTipsObj = new ArrayList<>();
         List<Point> finalTips = new ArrayList<>();
         // 手的图像
         Mat handFrame = new Mat();
@@ -306,10 +314,10 @@ public class KeystrokeTask {
         List<MatOfPoint> contours = new ArrayList<>();
         Mat hierarchy = new Mat(); //存储轮廓的拓扑结构
         Imgproc.findContours(CrFrame, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE);
-        System.out.println("TipDetection 手的图片轮廓数量 = " + contours.size());
+        Log.i(TAG, "TipDetection 手的图片轮廓数量 = " + contours.size());
         if(contours.size() > 5) { //轮廓效果不理想or画面中无手，直接返回(0,0)
-            System.out.println("TipDetection: 轮廓数量太多 or 画面中无手!");
-            return finalTips;
+            Log.i(TAG, "TipDetection: 轮廓数量太多 or 画面中无手!");
+            return finalTipsObj;
         }
         // 面积最大的两个轮廓，即手掌所在的轮廓
         List<MatOfPoint> handContours = new ArrayList<>();
@@ -317,16 +325,22 @@ public class KeystrokeTask {
         handContours.add(contours.get(maxContourIdx));
         contours.remove(maxContourIdx);
         handContours.add(contours.get(findMaxContour(contours)));
+        // 两只手的重心
+        Point[] centers = new Point[2];
+        int centerIdx = 0;
 
         // 每个手掌轮廓分别找指尖
         for (MatOfPoint handContour : handContours) {
             // 手的重心
             Moments moment = Imgproc.moments(handContour, true);
             Point center = new Point(moment.m10/moment.m00, moment.m01/moment.m00);
+            centers[centerIdx++] = center;
             Imgproc.circle(inputFrame, center, 5, new Scalar(0, 0, 255), -1);
             // 提取高于手重心的轮廓点, 以及与重心的距离
-            List<Point> handPoints = handContour.toList().stream().filter(point -> point.y < (center.y+inputFrame.height())/2).collect(Collectors.toList());
-            List<Integer> distances = handPoints.stream().map(point -> (int)distanceBetween(point, center)).collect(Collectors.toList());
+            List<Point> handPoints = handContour.toList().stream().filter(point ->
+                    point.y < (center.y+inputFrame.height())/2).collect(Collectors.toList());
+            List<Integer> distances = handPoints.stream().map(point ->
+                    (int)distanceBetween(point, center)).collect(Collectors.toList());
             // 前100个点移到后面, 方便检测到五个波峰
             handPoints.addAll(handPoints.subList(0, 100));
             handPoints = handPoints.subList(100, handPoints.size());
@@ -343,15 +357,21 @@ public class KeystrokeTask {
                 Point candidateTip = handPoints.get(peakIdxList.get(maxProminenceIdx));
                 if (finalTips.isEmpty() || isNewTip(candidateTip, finalTips)) {
                     finalTips.add(handPoints.get(peakIdxList.get(maxProminenceIdx)));
-                    System.out.println(handPoints.get(peakIdxList.get(maxProminenceIdx)));
+                    Log.i(TAG, "" + handPoints.get(peakIdxList.get(maxProminenceIdx)));
                     Imgproc.circle(inputFrame, handPoints.get(peakIdxList.get(maxProminenceIdx)), 5, new Scalar(0, 0, 255), -1);
                     tipCount++;
                 }
             }
         }
+        // 指尖从左到右排列, 并计算重心到之间的距离
+        sortByOneAxis(finalTips, 'x');
+        for (int i = 0; i < finalTips.size(); i++) {
+            int distance = (int)distanceBetween(finalTips.get(i), centers[i/5]);
+            finalTipsObj.add(new TipObject(finalTips.get(i), distance, centers[i/5]));
+        }
         Imgcodecs.imwrite("tipdet/handFrame.jpg", inputFrame);
 
-        return finalTips;
+        return finalTipsObj;
     }
 
     private List<Integer> findPeaks(List<Integer> list) {
@@ -425,63 +445,62 @@ public class KeystrokeTask {
         return true;
     }
 
-    /** 以下是 Keystroke Detection and Localization 部分 */
-
-    /*
-    // 检测某一帧画面的按键动作
-    public void KeyStrokeDetection() {
-        Log.i(TAG, "KeyStrokeDetection: 检测第 " + frameCounter + " 帧");
-        Mat handFrame = HandSegmentation(inputFrame);
-        Point fingerTip = TipDetection(handFrame);
-
-        //float stopProcessingTime = System.nanoTime()/1000000;
-        //float[] time = {stopProcessingTime - startProcessingTime};
-        //Log.i(TAG, "start ProcessingTime: " + frameCounter + "  " + startProcessingTime);
-        //Log.i(TAG, "stop ProcessingTime: " + frameCounter + "  " + stopProcessingTime + "finalKey: " + key);
-        //new Thread(new SensorDataSaver("KeyStrokeDelay", frameCounter, time)).start();
-
-        boolean currentStatus;
-        if(frameCounter == 0) {// 记录第一帧的指尖，用于之后的指尖距离计算
-            MainActivity.lastFingerTip = fingerTip;
+    /**
+     * Keystroke Detection and Localization,
+     *
+     */
+    public void KeystrokeDetection(List<TipObject> fingertips) {
+        if (prevFingertips.isEmpty()) {
+            // 初始情况下记录上一帧的指尖和距离
+            prevFingertips = fingertips;
         } else {
-            double disTwoTips = distanceBetween(fingerTip, lastFingerTip); //计算两指尖距离
-            Log.i(TAG, "KeyStrokeDetection: 与前一帧指尖的距离为" + disTwoTips);
-            if(disTwoTips < 15 && (fingerTip.x != 0 && fingerTip.y != 0) ) {
-                //两指尖的距离很小表示staying，指尖坐标非(0,0)即画面有指尖
-                currentStatus = true;
-                double distanceBetweenMoments = distanceBetween(preKeystrokeFingerTip, fingerTip);
-                Log.i(TAG, "KeyStrokeDetection: 重复检测两指尖之间的距离为" + distanceBetweenMoments);
-                if( !lastStatus && inKeyboardArea("KeyStrokeDetection", fingerTip)) {
-                    String key = KeyLocation(fingerTip);
-                    if(distanceBetweenMoments > 15) {
-                        // 计算KeyStroke的结束时间
-                        float stopProcessingTime = System.nanoTime()/1000000;
-                        float[] time = {stopProcessingTime - startProcessingTime};
-                        //Log.i(TAG, "start ProcessingTime: " + frameCounter + "  " + startProcessingTime);
-                        //Log.i(TAG, "stop ProcessingTime: " + frameCounter + "  " + stopProcessingTime + "finalKey: " + key);
-                        //new Thread(new SensorDataSaver("ZKeyStrokeDelay", frameCounter, time)).start();
-
-                        Log.i(TAG, "---KeyStrokeDetection!!!---帧数: " + frameCounter + "  final key: " + key);
-                        // MainActivity中的onCameraFrame方法中检测到为3，利用handler发送消息，Toast显示检测定位到的按键
-                        MainActivity.KEYSTROKE_SUCCESS = 3;
-                        MainActivity.KEYDET_RESULT = key;
-                        // 若在lastFingerTip处实时更新，距离是每两帧之间的，就失去了距离比较的意义
-                        preKeystrokeFingerTip = fingerTip;
-                        Log.i(TAG, "KeyStrokeDetection: 变换之前的lastFingerTip = " + preKeystrokeFingerTip);
-                    }
-                }
-            } else {
-                currentStatus = false;
+            // 判断两帧之间的指尖距离, 静止
+            boolean isStill = isStillFingertips(fingertips);
+            // 判断指尖到重心的距离, 按键动作
+            int hasTyping = hasTypingFingertips(fingertips);
+            // 与上一次keystroke相隔的帧
+            int frameInterval = frameCounter - prevStrokeFrame;
+            if (isStill && hasTyping != -1 && frameInterval > 10) {
+                String key = keyLocation(fingertips, hasTyping);
+                prevStrokeFrame = frameCounter;
             }
-            lastFingerTip = fingerTip;
-            lastStatus = currentStatus;
+            // 记录上一帧的指尖
+            for (int i = 0; i < fingertips.size(); i++) {
+                prevFingertips.get(i).setTip(fingertips.get(i).getTip());
+                prevFingertips.get(i).setCenter(fingertips.get(i).getCenter());
+            }
         }
     }
-     */
-    // 已检测到按键动作，定位按键
-    private String KeyLocation(Point tip) {
+
+    private boolean isStillFingertips(List<TipObject> fingertips) {
+        for (int i = 0; i < fingertips.size(); i++) {
+            int distance = (int)distanceBetween(fingertips.get(i).getTip(), prevFingertips.get(i).getTip());
+            if ( distance > 15) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private int hasTypingFingertips(List<TipObject> fingertips) {
+        int tipIdx = -1;
+        int maxOffset = Integer.MIN_VALUE;
+        for (int i = 0; i < fingertips.size(); i++) {
+            int offset = prevFingertips.get(i).getDistance() - fingertips.get(i).getDistance();
+            if (offset > maxOffset) {
+                tipIdx = i;
+                maxOffset = offset;
+            }
+        }
+        return (maxOffset > prevFingertips.get(tipIdx).getDistance() / 5) ? tipIdx : -1;
+    }
+
+
+    private String keyLocation(List<TipObject> fingertips, int typingIdx) {
+        Point tip = fingertips.get(typingIdx).getTip();
         double minDis = Double.POSITIVE_INFINITY;
         String minDisKey = "NullKey";
+        // 找与按键的指尖距离最近的key
         for(String key : keyMap.keySet()) {
             Point coord4Key = keyMap.get(key);
             assert(coord4Key != null); // assert后的布尔表达式为true时继续执行
@@ -495,7 +514,7 @@ public class KeystrokeTask {
     }
 
     public static double distanceBetween(Point p1, Point p2) {
-        return Math.sqrt(pow(p1.x-p2.x, 2) + pow(p1.y-p2.y, 2));
+        return sqrt(pow(p1.x-p2.x, 2) + pow(p1.y-p2.y, 2));
     }
 
 }
