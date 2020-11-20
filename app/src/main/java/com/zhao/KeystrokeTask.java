@@ -279,7 +279,7 @@ public class KeystrokeTask {
 
     /**
      * Fingertip Detection,
-     * 阈值化+Ostu方法分割出手部的轮廓
+     * 阈值化方法分割出手部的轮廓
      * 找出面积最大的两个轮廓, 视为两只手的轮廓
      * 对每个轮廓, 计算手部重心到轮廓点的距离
      * 根据Prominence和水平间距过滤出波峰, 即为指尖
@@ -494,7 +494,6 @@ public class KeystrokeTask {
         }
         return (maxOffset > prevFingertips.get(tipIdx).getDistance() / 5) ? tipIdx : -1;
     }
-
 
     private String keyLocation(List<TipObject> fingertips, int typingIdx) {
         Point tip = fingertips.get(typingIdx).getTip();
