@@ -5,16 +5,20 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.WindowManager;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.opencv.android.BaseLoaderCallback;
@@ -62,8 +66,15 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public static Point keyboardRightDown = new Point(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
     // 手重心到指尖的距离
     public static List<TipObject> prevFingertips = new ArrayList<>();
-    //
-    public static int prevStrokeFrame = 0;
+    // 之前没有在按
+    public static boolean prevNotTyping = true;
+
+    public static int MESSAGE_TOAST = -1;
+    public static final int STROKE_SUC = 3;
+    public static String STROKE_KEY = "NullKey";
+    // 统计resultView显示的字符个数
+    private int charNumInResultView = 0;
+    private TextView mResultView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -93,7 +104,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         sensorActivity = new SensorActivity(sensorManager);
         mCvCameraView = findViewById(R.id.camera_view);
         mCvCameraView.setCvCameraViewListener(this);
-
+        mResultView = findViewById(R.id.result_view);
     }
 
     @Override
@@ -217,5 +228,33 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         return frame;
     }
 
+    private void checkMessage() {
+        switch (MESSAGE_TOAST) {
+            case STROKE_SUC:
+                Message msg = new Message();
+                msg.what = STROKE_SUC;
+                handler.sendMessage(msg);
+                break;
+        }
+    }
+
+    @SuppressLint("HandlerLeak")
+    private final Handler handler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            int msgWhat = msg.what;
+            switch (msgWhat) {
+                case STROKE_SUC:
+                    MESSAGE_TOAST = -1;
+                    final int maxCharNumInResultView = 40;
+                    if (charNumInResultView == maxCharNumInResultView) {
+                        mResultView.setText("");
+                        charNumInResultView = 0;
+                    }
+                    mResultView.append(STROKE_KEY);
+                    charNumInResultView++;
+            }
+        }
+    };
 
 }

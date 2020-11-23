@@ -24,13 +24,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static com.zhao.MainActivity.MESSAGE_TOAST;
+import static com.zhao.MainActivity.STROKE_KEY;
+import static com.zhao.MainActivity.STROKE_SUC;
 import static com.zhao.MainActivity.keyMap;
 import static com.zhao.MainActivity.keyboardLeftDown;
 import static com.zhao.MainActivity.keyboardLeftUp;
 import static com.zhao.MainActivity.keyboardRightDown;
 import static com.zhao.MainActivity.keyboardRightUp;
 import static com.zhao.MainActivity.prevFingertips;
-import static com.zhao.MainActivity.prevStrokeFrame;
+import static com.zhao.MainActivity.prevNotTyping;
 import static java.lang.Math.PI;
 import static java.lang.Math.max;
 import static java.lang.Math.pow;
@@ -314,17 +317,25 @@ public class KeystrokeTask {
         List<MatOfPoint> contours = new ArrayList<>();
         Mat hierarchy = new Mat(); //存储轮廓的拓扑结构
         Imgproc.findContours(CrFrame, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE);
-        Log.i(TAG, "TipDetection 手的图片轮廓数量 = " + contours.size());
-        if(contours.size() > 5) { //轮廓效果不理想or画面中无手，直接返回(0,0)
-            Log.i(TAG, "TipDetection: 轮廓数量太多 or 画面中无手!");
+        //Log.i(TAG, "TipDetection 手的图片轮廓数量 = " + contours.size());
+        System.out.println("TipDetection 手的图片轮廓数量 = " + contours.size());
+        if(contours.size() > 5 || contours.size() < 2) {
+            //Log.i(TAG, "TipDetection: 轮廓数量太多 or 画面中无手!");
+            System.out.println("TipDetection: 轮廓数量太多 or 画面中无手!");
             return finalTipsObj;
         }
+
         // 面积最大的两个轮廓，即手掌所在的轮廓
         List<MatOfPoint> handContours = new ArrayList<>();
         int maxContourIdx = findMaxContour(contours);
         handContours.add(contours.get(maxContourIdx));
         contours.remove(maxContourIdx);
         handContours.add(contours.get(findMaxContour(contours)));
+        // 当手刚进入视野时，可能检测到轮廓很小
+        if (handContours.get(0).toArray().length < 1000 || handContours.get(1).toArray().length < 100) {
+            System.out.println("TipDetection: 轮廓数量太多 or 画面中无手!");
+            return finalTipsObj;
+        }
         // 两只手的重心
         Point[] centers = new Point[2];
         int centerIdx = 0;
@@ -338,7 +349,7 @@ public class KeystrokeTask {
             Imgproc.circle(inputFrame, center, 5, new Scalar(0, 0, 255), -1);
             // 提取高于手重心的轮廓点, 以及与重心的距离
             List<Point> handPoints = handContour.toList().stream().filter(point ->
-                    point.y < (center.y+inputFrame.height())/2).collect(Collectors.toList());
+                    point.y < (center.y+frameHeight)/2).collect(Collectors.toList());
             List<Integer> distances = handPoints.stream().map(point ->
                     (int)distanceBetween(point, center)).collect(Collectors.toList());
             // 前100个点移到后面, 方便检测到五个波峰
@@ -346,22 +357,35 @@ public class KeystrokeTask {
             handPoints = handPoints.subList(100, handPoints.size());
             distances.addAll(distances.subList(0, 100));
             distances = distances.subList(100, distances.size());
+            for (Point pt : handPoints) {
+                System.out.println(pt);
+            }
+            for (int dis : distances) {
+                System.out.println(dis);
+            }
             // 检测距离的波峰和prominence
             List<Integer> peakIdxList = findPeaks(distances);
             List<Integer> prominence = calcProminence(peakIdxList, distances);
             // 根据prominence筛选波峰, 也即指尖
             int tipCount = 0;
+            List<Point> oneHandTips = new ArrayList<>();
             while (tipCount < 5) {
                 int maxProminenceIdx = findMaxElementIdx(prominence);
                 prominence.set(maxProminenceIdx, 0);
                 Point candidateTip = handPoints.get(peakIdxList.get(maxProminenceIdx));
-                if (finalTips.isEmpty() || isNewTip(candidateTip, finalTips)) {
-                    finalTips.add(handPoints.get(peakIdxList.get(maxProminenceIdx)));
-                    Log.i(TAG, "" + handPoints.get(peakIdxList.get(maxProminenceIdx)));
+                // 过滤波峰
+                if (candidateTip.y > center.y) {
+                    continue;
+                }
+                if (oneHandTips.isEmpty() || isNewTip(candidateTip, oneHandTips)) {
+                    oneHandTips.add(handPoints.get(peakIdxList.get(maxProminenceIdx)));
+                    //Log.i(TAG, "" + handPoints.get(peakIdxList.get(maxProminenceIdx)));
+                    //System.out.println("" + handPoints.get(peakIdxList.get(maxProminenceIdx)));
                     Imgproc.circle(inputFrame, handPoints.get(peakIdxList.get(maxProminenceIdx)), 5, new Scalar(0, 0, 255), -1);
                     tipCount++;
                 }
             }
+            finalTips.addAll(oneHandTips);
         }
         // 指尖从左到右排列, 并计算重心到之间的距离
         sortByOneAxis(finalTips, 'x');
@@ -369,7 +393,7 @@ public class KeystrokeTask {
             int distance = (int)distanceBetween(finalTips.get(i), centers[i/5]);
             finalTipsObj.add(new TipObject(finalTips.get(i), distance, centers[i/5]));
         }
-        Imgcodecs.imwrite("tipdet/handFrame.jpg", inputFrame);
+        Imgcodecs.imwrite("tipdet/tip.jpg", inputFrame);
 
         return finalTipsObj;
     }
@@ -458,12 +482,12 @@ public class KeystrokeTask {
             boolean isStill = isStillFingertips(fingertips);
             // 判断指尖到重心的距离, 按键动作
             int hasTyping = hasTypingFingertips(fingertips);
-            // 与上一次keystroke相隔的帧
-            int frameInterval = frameCounter - prevStrokeFrame;
-            if (isStill && hasTyping != -1 && frameInterval > 10) {
+            if (isStill && hasTyping != -1 && prevNotTyping) {
                 String key = keyLocation(fingertips, hasTyping);
-                prevStrokeFrame = frameCounter;
+                MESSAGE_TOAST = 3;
+                STROKE_KEY = key;
             }
+            prevNotTyping = (hasTyping == -1);
             // 记录上一帧的指尖
             for (int i = 0; i < fingertips.size(); i++) {
                 prevFingertips.get(i).setTip(fingertips.get(i).getTip());
