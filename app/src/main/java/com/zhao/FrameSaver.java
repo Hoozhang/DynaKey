@@ -19,7 +19,7 @@ public class FrameSaver implements Runnable {
 
     @Override
     public void run() {
-        String storePath = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "CamK";
+        String storePath = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "DynaKey";
         File sdCardDir = new File(storePath);
         if (!sdCardDir.exists())
             sdCardDir.mkdir();

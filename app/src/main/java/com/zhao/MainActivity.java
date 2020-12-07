@@ -28,6 +28,8 @@ import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
+import org.opencv.core.Scalar;
+import org.opencv.imgproc.Imgproc;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -64,11 +66,20 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public static Point keyboardRightUp = new Point(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
     public static Point keyboardLeftDown = new Point(Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
     public static Point keyboardRightDown = new Point(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
+
+    public static MovingAverage movingGyroValue;
+
+    // 相机移动前和移动后的帧，两帧用于透视变换，不能用Mat格式，因为此时还没有加载OpenCV库
+    public static Bitmap frameBeforeMoving;
+    public static Bitmap frameAfterMoving;
+
     // 手重心到指尖的距离
     public static List<TipObject> prevFingertips = new ArrayList<>();
     // 之前没有在按
-    public static boolean prevNotTyping = true;
+    public static int prevStrokeFrame = 0;
+    public static String prevStrokeKey = "NullKey";
 
+    // 界面显示输出结果
     public static int MESSAGE_TOAST = -1;
     public static final int STROKE_SUC = 3;
     public static String STROKE_KEY = "NullKey";
@@ -76,11 +87,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private int charNumInResultView = 0;
     private TextView mResultView;
 
+    public static List<TipObject> fingertips = new ArrayList<>();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         // 设置全屏
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -105,6 +117,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         mCvCameraView = findViewById(R.id.camera_view);
         mCvCameraView.setCvCameraViewListener(this);
         mResultView = findViewById(R.id.result_view);
+        movingGyroValue = new MovingAverage(10);
     }
 
     @Override
@@ -214,6 +227,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         // 系统开始处理帧画面
         if (viewMode == MODE_START) {
+            // 核查按键的结果显示在屏幕上
+            checkMessage();
             // 保存每帧画面在本地
             new Thread(new FrameSaver("frame-"+frameCounter, bitmap)).start();
 
@@ -221,8 +236,27 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             // 帧计数传入Service，帧通过MyApplication传入
             keyboardIntent.putExtra("frameCounter", frameCounter);
             frameCounter++;
+            float startProcessingTime = System.nanoTime()/1000000;
+            keyboardIntent.putExtra("startProcessingTime", startProcessingTime);
+
             // 进入服务(记得在AndroidManifest.xml中注册服务)
             startService(keyboardIntent);
+
+
+            // 检测到的按键重心实时显示在手机屏幕上
+            if (!keyMap.isEmpty()) {
+                for (Point p : keyMap.values())
+                    Imgproc.circle(frame, p, 2, new Scalar(0, 0, 255), -1);
+                Imgproc.circle(frame, keyboardLeftUp, 2, new Scalar(255, 0, 0), -1);
+                Imgproc.circle(frame, keyboardRightUp, 2, new Scalar(255, 0, 0), -1);
+                Imgproc.circle(frame, keyboardLeftDown, 2, new Scalar(255, 0, 0), -1);
+                Imgproc.circle(frame, keyboardRightDown, 2, new Scalar(255, 0, 0), -1);
+            }
+            if (!fingertips.isEmpty()) {
+                for (TipObject tip : fingertips) {
+                    Imgproc.circle(frame, tip.getTip(), 2, new Scalar(0, 0, 255), -1);
+                }
+            }
 
         }
         return frame;

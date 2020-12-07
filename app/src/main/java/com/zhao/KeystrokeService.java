@@ -12,6 +12,11 @@ import org.opencv.core.Mat;
 
 import java.util.List;
 
+import static com.zhao.MainActivity.movingGyroValue;
+import static com.zhao.MainActivity.frameBeforeMoving;
+import static com.zhao.MainActivity.frameAfterMoving;
+import static com.zhao.MainActivity.fingertips;
+
 public class KeystrokeService extends IntentService {
     private static final String TAG = "KeyboardService";
 
@@ -29,6 +34,7 @@ public class KeystrokeService extends IntentService {
         assert intent != null;
         // 取出 frameCounter 和 frame
         int frameCounter = intent.getIntExtra("frameCounter", -1);
+        float startProcessingTime = intent.getFloatExtra("startProcessingTime", -1);
         BitmapApplication bitmapApp = (BitmapApplication)getApplicationContext();
         Bitmap inputBitmap = bitmapApp.getOneBitmap();
         Mat inputFrame = new Mat();
@@ -36,42 +42,26 @@ public class KeystrokeService extends IntentService {
         int frameWidth = inputFrame.width();
         int frameHeight = inputFrame.height();
 
-        KeystrokeTask keystrokeTask = new KeystrokeTask(frameCounter, inputFrame);
+        KeystrokeTask keystrokeTask = new KeystrokeTask(frameCounter, inputFrame, startProcessingTime);
         if(MainActivity.isFirstFrame) {
-            // First frame for Key Exaction
+            // First frame for Key Extraction
             MainActivity.isFirstFrame = false;
-            keystrokeTask.KeyExtraction();
+            new KeyExtractor(inputFrame).KeyExtraction();
             //frameBeforeMoving = inputBitmap.copy(Bitmap.Config.RGB_565, true);
         } else if(frameCounter % 5 == 0) {
             // Subsequent frames for tracking, keystroke detection and localization
             /*
-            // 当Gyro检测运动 or 检测到键盘转换出错时，就继续透视变换
-            if(movingGyroValue.getValue() > 0.02 || isWrongTransformation) {
-            //if (movingGyroAngle > 0.1 || isWrongTransformation) {
-                //MainActivity.UPDATE_KEYMAP = isWrongTransformation? 7 : MainActivity.UPDATE_KEYMAP;
-                Log.i(TAG, "onHandleIntent: 开始透视变换 " + System.currentTimeMillis());
+            if(movingGyroValue.getValue() > 0.02) {
                 frameAfterMoving = inputBitmap.copy(Bitmap.Config.RGB_565, true);
-                keyboardTask.UpdateKeyMap();
+                new KeyTracking().PersTrans();
                 frameBeforeMoving = frameAfterMoving.copy(Bitmap.Config.RGB_565, true);
-                //movingGyroAngle = 0;
-                //isFirstValue = true;
-            } else {
-                Log.i(TAG, "onHandleIntent: 停止透视变换 " + System.currentTimeMillis());
             }
-
-            float[] data = {avg(preKeyMap, keyMap), avgIoU(preKeyMap, keyMap)};
-            new Thread(new SensorDataSaver("offset", System.currentTimeMillis(), data)).start();
-             */
-
-            // 若导出的帧图像水平方向，需旋转90度：转置+水平翻转
-            //Mat transposeFrame = new Mat(), flipFrame = new Mat();
-            //transpose(oneFrame, transposeFrame);
-            //flip(transposeFrame, flipFrame, 1);
-
-
-            Mat handFrame = keystrokeTask.HandSegmentation();
-            List<TipObject> fingertips = keystrokeTask.TipDetection(handFrame);
-
+            */
+            // Fingertip Detection
+            FingertipDetector tipDetector = new FingertipDetector(inputFrame);
+            Mat handFrame = tipDetector.HandSegmentation();
+            fingertips = tipDetector.TipDetection(handFrame);
+            // Keystroke detection
             if (!fingertips.isEmpty()) {
                 keystrokeTask.KeystrokeDetection(fingertips);
             }

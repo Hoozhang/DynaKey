@@ -6,6 +6,8 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.util.Log;
 
+import static com.zhao.MainActivity.movingGyroValue;
+
 public class SensorActivity implements SensorEventListener {
     private static final String TAG = "SensorActivity";
 
@@ -38,8 +40,7 @@ public class SensorActivity implements SensorEventListener {
         if (sensorType == Sensor.TYPE_GYROSCOPE) {
             float[] gyroData = sensorEvent.values.clone();
             double gyroMagnitude = Math.sqrt(gyroData[0]*gyroData[0]+gyroData[1]*gyroData[1]+gyroData[2]*gyroData[2]);
-            //movingGyroValue.pushValue((float) gyroMagnitude);
-
+            movingGyroValue.pushValue((float)gyroMagnitude);
             //long formatTimeStamp = (new Date()).getTime() + (sensorEvent.timestamp-System.nanoTime())/1000000L;
             //integralGyroAngle(gyroMagnitude, formatTimeStamp/1000L);
             //new Thread(new SensorDataSaver("sensorGyro2", System.currentTimeMillis(), gyroData)).start();
