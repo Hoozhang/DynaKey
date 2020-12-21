@@ -39,24 +39,21 @@ public class KeystrokeService extends IntentService {
         Bitmap inputBitmap = bitmapApp.getOneBitmap();
         Mat inputFrame = new Mat();
         Utils.bitmapToMat(inputBitmap, inputFrame);
-        int frameWidth = inputFrame.width();
-        int frameHeight = inputFrame.height();
 
-        KeystrokeTask keystrokeTask = new KeystrokeTask(frameCounter, inputFrame, startProcessingTime);
+        KeystrokeDetector keystrokeTask = new KeystrokeDetector(frameCounter, inputFrame, startProcessingTime);
         if(MainActivity.isFirstFrame) {
             // First frame for Key Extraction
             MainActivity.isFirstFrame = false;
             new KeyExtractor(inputFrame).KeyExtraction();
-            //frameBeforeMoving = inputBitmap.copy(Bitmap.Config.RGB_565, true);
+            frameBeforeMoving = inputBitmap.copy(Bitmap.Config.RGB_565, true);
         } else if(frameCounter % 5 == 0) {
             // Subsequent frames for tracking, keystroke detection and localization
-            /*
-            if(movingGyroValue.getValue() > 0.02) {
+            // Gyro value for PersTrans
+            /*if(movingGyroValue.getValue() > 0.02) {
                 frameAfterMoving = inputBitmap.copy(Bitmap.Config.RGB_565, true);
                 new KeyTracking().PersTrans();
                 frameBeforeMoving = frameAfterMoving.copy(Bitmap.Config.RGB_565, true);
-            }
-            */
+            }*/
             // Fingertip Detection
             FingertipDetector tipDetector = new FingertipDetector(inputFrame);
             Mat handFrame = tipDetector.HandSegmentation();

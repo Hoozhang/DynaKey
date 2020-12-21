@@ -40,7 +40,7 @@ import static java.lang.Math.max;
 import static java.lang.Math.pow;
 import static java.lang.Math.sqrt;
 
-public class KeystrokeTask {
+public class KeystrokeDetector {
     private static final String TAG = "KeystrokeTask";
 
     // 帧的计数
@@ -52,7 +52,7 @@ public class KeystrokeTask {
 
     private float startProcessingTime;
 
-    public KeystrokeTask(int count, Mat oneFrame, float startProcessingTime) {
+    public KeystrokeDetector(int count, Mat oneFrame, float startProcessingTime) {
         frameCounter = count;
         frameWidth = oneFrame.width();
         frameHeight = oneFrame.height();
@@ -101,6 +101,7 @@ public class KeystrokeTask {
     }
 
     private int hasStillFingertips(List<TipObject> fingertips) {
+        // 判断左手是否静止
         boolean stillLeft = true;
         for (int i = 0; i < fingertips.size()/2; i++) {
             int distance = (int)distanceBetween(fingertips.get(i).getTip(), prevFingertips.get(i).getTip());
@@ -109,6 +110,7 @@ public class KeystrokeTask {
                 break;
             }
         }
+        // 判断右手是否静止
         boolean stillRight = true;
         for (int i = fingertips.size()/2; i < fingertips.size(); i++) {
             int distance = (int) distanceBetween(fingertips.get(i).getTip(), prevFingertips.get(i).getTip());
@@ -118,21 +120,26 @@ public class KeystrokeTask {
             }
         }
         if (stillLeft && stillRight) {
+            // 左右手都静止
             return 3;
         } else if (stillRight) {
+            // 右手静止
             return 2;
         } else if (stillLeft) {
+            // 左手静止
             return 1;
         } else {
+            // 没有手静止
             return 0;
         }
     }
 
     private int hasTypingFingertips(List<TipObject> fingertips, int isStill) {
         if (isStill == 0) {
+            // 没有手静止，就无需再判断 typing finger
             return -1;
         }
-        // 判断是左手高还是右手高
+        // 判断是左手高还是右手高，高的手是 typing hand
         int leftSum = 0, rightSum = 0;
         for (int i = 0; i < fingertips.size(); i++) {
             if (i < 4) {
@@ -143,35 +150,38 @@ public class KeystrokeTask {
         }
         int beginIdx, endIdx;
         if (leftSum < rightSum) {
+            // 左手高
             if (isStill == 2) {
+                // 异常情况：右手静止
                 return -1;
             }
-            beginIdx = 0;
+            beginIdx = 1;
             endIdx = fingertips.size()/2;
         } else {
+            // 右手高
             if (isStill == 1) {
+                // 异常情况：左手静止
                 return -1;
             }
             beginIdx = fingertips.size()/2;
-            endIdx = fingertips.size();
+            endIdx = fingertips.size()-1;
         }
 
         int tipIdx = -1;
-        int maxOffset = Integer.MIN_VALUE;
+        double maxY = Integer.MIN_VALUE;
         for (int i = beginIdx; i < endIdx; i++) {
-            int offset1 = prevFingertips.get(i).getDistance();
-            int offset2 = fingertips.get(i).getDistance();
-            int offset = Math.abs(offset1 - offset2);
-            if (offset > maxOffset && KeyExtractor.inKeyboardArea("keyDet", fingertips.get(i).getTip())) {
+            Point tip = fingertips.get(i).getTip();
+            if (tip.y > maxY && KeyExtractor.inKeyboardArea("keyDet", tip)) {
                 tipIdx = i;
-                maxOffset = offset;
+                maxY = tip.y;
             }
         }
         if (tipIdx == -1) {
             // 没找到手指
             return -1;
         } else {
-            return (maxOffset > prevFingertips.get(tipIdx).getDistance() / 10) ? tipIdx : -1;
+            //return (maxOffset > prevFingertips.get(tipIdx).getDistance() / 10) ? tipIdx : -1;
+            return tipIdx;
         }
 
     }
@@ -197,7 +207,7 @@ public class KeystrokeTask {
         return sqrt(pow(p1.x-p2.x, 2) + pow(p1.y-p2.y, 2));
     }
 
-    private void saveFrame(String fileName, Mat mat) {
+    public static void saveFrame(String fileName, Mat mat) {
         Bitmap bitmap = Bitmap.createBitmap(mat.width(), mat.height(), Bitmap.Config.RGB_565);
         Utils.matToBitmap(mat, bitmap); // OpenCV的Mat2Bitmap
         new Thread(new FrameSaver(fileName, bitmap)).start(); // 保存图片

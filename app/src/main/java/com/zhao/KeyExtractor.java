@@ -11,7 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.zhao.KeystrokeTask.distanceBetween;
+import static com.zhao.KeystrokeDetector.distanceBetween;
 import static com.zhao.MainActivity.keyMap;
 import static com.zhao.MainActivity.keyboardLeftDown;
 import static com.zhao.MainActivity.keyboardLeftUp;
@@ -57,7 +57,11 @@ public class KeyExtractor {
         Point[] maxContourArray = maxContour.toArray();
         double keyboardArea = Imgproc.contourArea(maxContour);
         // 根据键盘边缘轮廓找到四个角点，用于过滤false轮廓
-        findCornerPoints(maxContourArray);
+        List<Point> cornerList = findCornerPoints(maxContourArray);
+        keyboardLeftUp = cornerList.get(0);
+        keyboardRightUp = cornerList.get(1);
+        keyboardLeftDown = cornerList.get(2);
+        keyboardRightDown = cornerList.get(3);
         Imgproc.circle(frame, keyboardLeftUp, 5, new Scalar(255, 0, 0), -1);
         Imgproc.circle(frame, keyboardRightUp, 5, new Scalar(255, 0, 0), -1);
         Imgproc.circle(frame, keyboardLeftDown, 5, new Scalar(255, 0, 0), -1);
@@ -127,7 +131,7 @@ public class KeyExtractor {
     }
 
     // 找键盘边缘的四个角点
-    private void findCornerPoints(Point[] pointArray) {
+    private List<Point> findCornerPoints(Point[] pointArray) {
         List<Point> contour = new ArrayList<>(Arrays.asList(pointArray));
         // contour后面再添加前面的100个点，方便循环检测一遍
         contour.addAll(Arrays.asList(pointArray).subList(0,100));
@@ -155,10 +159,7 @@ public class KeyExtractor {
         sortByOneAxis(cornerList, 'y');
         for(int i = 0; i <= cornerList.size()-2; i = i+2)
             sortByOneAxis(cornerList.subList(i,i+2), 'x');
-        keyboardLeftUp = cornerList.get(0);
-        keyboardRightUp = cornerList.get(1);
-        keyboardLeftDown = cornerList.get(2);
-        keyboardRightDown = cornerList.get(3);
+        return cornerList;
     }
 
     private int calcTheta(List<Point> hullList, int i, int gap) {

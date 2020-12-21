@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
     private static final String TAG = "MainActivity";
@@ -60,7 +61,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public static boolean isFirstFrame = true;
 
     // 提取的"按键-坐标"映射
-    public static Map<String, Point> keyMap = new HashMap<>();
+    public static ConcurrentHashMap<String, Point> keyMap = new ConcurrentHashMap<>();
     // 键盘的四个角点
     public static Point keyboardLeftUp = new Point(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
     public static Point keyboardRightUp = new Point(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
@@ -247,16 +248,17 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             if (!keyMap.isEmpty()) {
                 for (Point p : keyMap.values())
                     Imgproc.circle(frame, p, 2, new Scalar(0, 0, 255), -1);
-                Imgproc.circle(frame, keyboardLeftUp, 2, new Scalar(255, 0, 0), -1);
+                /*Imgproc.circle(frame, keyboardLeftUp, 2, new Scalar(255, 0, 0), -1);
                 Imgproc.circle(frame, keyboardRightUp, 2, new Scalar(255, 0, 0), -1);
                 Imgproc.circle(frame, keyboardLeftDown, 2, new Scalar(255, 0, 0), -1);
-                Imgproc.circle(frame, keyboardRightDown, 2, new Scalar(255, 0, 0), -1);
+                Imgproc.circle(frame, keyboardRightDown, 2, new Scalar(255, 0, 0), -1);*/
             }
+            /*
             if (!fingertips.isEmpty()) {
                 for (TipObject tip : fingertips) {
                     Imgproc.circle(frame, tip.getTip(), 2, new Scalar(0, 0, 255), -1);
                 }
-            }
+            }*/
 
         }
         return frame;
@@ -282,7 +284,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                     MESSAGE_TOAST = -1;
                     final int maxCharNumInResultView = 40;
                     if (charNumInResultView == maxCharNumInResultView) {
-                        mResultView.setText("");
+                        //mResultView.setText("");
+                        mResultView.append("\n");
                         charNumInResultView = 0;
                     }
                     mResultView.append(STROKE_KEY);
